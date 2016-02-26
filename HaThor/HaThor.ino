@@ -30,22 +30,24 @@ SX1509 io; // Create an SX1509 object to be used throughout
 class Leg {
   private:
     uint8_t red, green, blue = 0;
-    uint8_t findLargest(uint8_t, uint8_t, uint8_t);
   public:
     byte RPIN, GPIN, BPIN;
     Leg(byte, byte, byte);
     void fadeIn(uint8_t, uint8_t, uint8_t, int);
     void fadeOut(int);
     void off();
-    void on(uint8_t, uint8_t, uint8_t);
+    void set(uint8_t, uint8_t, uint8_t);
 };
 
 class Tower {
   private:
     Leg *legs[4];
+    uint8_t countLegs(byte);
   public:
     Tower();
     Leg *leg(byte);
+    void fadeIn(byte, uint8_t, uint8_t, uint8_t, int);
+//    void fadeOut(int, int);
 };
 
 void setup()
@@ -80,17 +82,25 @@ Tower tower;
 
 void loop()
 {
-  // Accesses leg0 and calls built-in fade function
-  tower.leg(0)->fadeIn(255, 0, 150, 10);
-  delay(100);
-  tower.leg(0)->fadeOut(10);
-  delay(200);
-  tower.leg(0)->on(100,250,50);
-  delay(100);
+  // Fades in all 4 legs to white
+  tower.fadeIn(1111, 255, 255, 255, 50);
+  delay(500);
   tower.leg(0)->off();
-  delay(50);
-  tower.leg(0)->on(255,255,255);
-  delay(150);
+  tower.leg(1)->off();
+  tower.leg(2)->off();
+  tower.leg(3)->off();
+  delay(500);
+//  // Accesses leg0 and calls built-in fade function
+//  tower.leg(0)->fadeIn(255, 0, 150, 10);
+//  delay(100);
+//  tower.leg(0)->fadeOut(10);
+//  delay(200);
+//  tower.leg(0)->set(100,250,50);
+//  delay(100);
+//  tower.leg(0)->off();
+//  delay(50);
+//  tower.leg(0)->set(255,255,255);
+//  delay(150);
 }
 
 /*************************************
@@ -119,7 +129,6 @@ void Leg::fadeIn(uint8_t newRed = 0, uint8_t newGreen = 0, uint8_t newBlue = 0, 
   red = newRed;
   green = newGreen;
   blue = newBlue;
-//  Serial.println("Fadein values: " + String(*red) + "  " + String(*green) + "   " + String(*blue));
 }
 
 void Leg::fadeOut(int timer = 0) {
@@ -148,7 +157,7 @@ void Leg::off(){
   blue = 0;
 }
 
-void Leg::on(uint8_t newRed = 0, uint8_t newGreen = 0, uint8_t newBlue = 0){
+void Leg::set(uint8_t newRed = 0, uint8_t newGreen = 0, uint8_t newBlue = 0){
   io.analogWrite(RPIN, invert(newRed));
   io.analogWrite(GPIN, invert(newGreen));
   io.analogWrite(BPIN, invert(newBlue));
@@ -158,18 +167,6 @@ void Leg::on(uint8_t newRed = 0, uint8_t newGreen = 0, uint8_t newBlue = 0){
   blue = newBlue;
 }
 
-// Helper function to find largest value to be used to calculate step sizes
-uint8_t Leg::findLargest(uint8_t num1, uint8_t num2, uint8_t num3) {
-  uint8_t temp = 0;
-  if (num1 >= num2 && num1 >= num3) {
-    temp = num1;
-  } else if (num2 >= num1 && num2 >= num3) {
-    temp = num2;
-  } else {
-    temp = num3;
-  }
-  return temp;
-}
 
 /*************************************
  * TOWER OBJECT FUNCTION DEFINITIONS
@@ -184,10 +181,63 @@ Tower::Tower(){
   }
 }
 
+uint8_t Tower::countLegs(byte leg_select) {
+  // (1) 1 = leg(0)
+  // (10) 2 = leg(1)
+  // (100) 4 = leg(2)
+  // (1000) 8 = leg(3)
+  uint8_t remaining = uint8_t(leg_select);
+  uint8_t count = 0;
+  
+  if (remaining > 7) {
+    count += 1;
+    remaining -= 8;
+  }
+  if(remaining > 3){
+    count += 1;
+    remaining -= 4;
+  }
+  if (remaining > 1) {
+    count += 1;
+    remaining -= 2;
+  }
+  if (remaining > 0){
+    count += 1;
+    // remaining -= 1;
+  }
+  return count;
+}
+
 // Returns a leg of the tower
 Leg *Tower::leg(byte leg){
   return legs[leg];
 }
+
+void Tower::fadeIn(byte legs, uint8_t newRed = 0, uint8_t newGreen = 0, uint8_t newBlue = 0, int timer = 0) {
+  uint8_t largest = findLargest(newRed, newGreen, newBlue);
+  uint8_t leg_count = countLegs(legs);
+  uint8_t remainingLegs = uint8_t(legs);
+  for(int i = 0; i < largest; i++) {
+    if (remainingLegs > 7) {
+      remainingLegs -= 8;
+      tower.leg(3)->set(i*(float(newRed)/float(largest)), i*(float(newGreen)/float(largest)), i*(float(newBlue)/float(largest)));
+    }
+    if (remainingLegs > 3) {
+      remainingLegs -= 4;
+      tower.leg(2)->set(i*(float(newRed)/float(largest)), i*(float(newGreen)/float(largest)), i*(float(newBlue)/float(largest)));
+    }
+    if (remainingLegs > 1) {
+      remainingLegs -= 2;
+      tower.leg(1)->set(i*(float(newRed)/float(largest)), i*(float(newGreen)/float(largest)), i*(float(newBlue)/float(largest)));
+    }
+    if (remainingLegs > 0) {
+      // remainingLegs -= 1;
+      tower.leg(0)->set(i*(float(newRed)/float(largest)), i*(float(newGreen)/float(largest)), i*(float(newBlue)/float(largest)));
+    }
+    delay(timer/float(leg_count)); 
+  }
+}
+
 
 /*************************************
  * HELPER  FUNCTION DEFINITIONS
@@ -195,5 +245,18 @@ Leg *Tower::leg(byte leg){
 // Helper to invert uint8_t numbers because the SX1509 has inverted logic
 uint8_t invert(uint8_t num){
   return 255-num;
+}
+
+// Helper function to find largest value to be used to calculate step sizes
+uint8_t findLargest(uint8_t num1, uint8_t num2, uint8_t num3) {
+  uint8_t temp = 0;
+  if (num1 >= num2 && num1 >= num3) {
+    temp = num1;
+  } else if (num2 >= num1 && num2 >= num3) {
+    temp = num2;
+  } else {
+    temp = num3;
+  }
+  return temp;
 }
 
